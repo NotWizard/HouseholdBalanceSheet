@@ -65,3 +65,18 @@ test('CI desktop job 包含 emit 构建冒烟，与 release 流水线无验证�
   // 否则 rewriteRelativeImportExtensions 重写等 emit 期错误会延迟到发版才暴露
   assert.match(ciSource, /npm --prefix desktop run build/);
 });
+
+test('release workflow 的 bash 脚本里裸 $VAR 后不得紧跟全角字符', () => {
+  // bash 在 UTF-8 locale 下会把 $VAR 后紧跟的全角字符（如（）粘连进变量名，
+  // set -u 下直接 unbound variable 失败 —— v0.6.0 首次发版即踩中。
+  // 裸引用（$VAR 而非 ${VAR}）后紧跟全角字符即报错。
+  const runBlocks = workflowSource.match(/run: \|[\s\S]*?(?=\n  \w|\n      -)/g) ?? [];
+  for (const block of runBlocks) {
+    const bareRefs = block.matchAll(/\$[A-Z_]+[^\x00-\x7F]/g);
+    for (const hit of bareRefs) {
+      assert.fail(
+        `bash 裸变量引用后紧跟全角字符，需改成 \${VAR} 形式: ${hit[0]}`
+      );
+    }
+  }
+});
