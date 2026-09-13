@@ -29,6 +29,9 @@
 
 ### Fixed
 
+- 修复发布流水线版本断言脚本在 bash UTF-8 locale 下把全角括号粘连进变量名导致首次发版失败：成功提示改用 `${DESKTOP_VERSION}` 花括号定界，并新增回归测试禁止裸 `$VAR` 后紧跟非 ASCII 字符。
+- Fix the release pipeline's version assertion failing on the first v0.6.0 run: under a UTF-8 locale, bash glued a full-width parenthesis into the `$DESKTOP_VERSION` variable name. The success message now uses `${DESKTOP_VERSION}` brace delimiting, and a regression test bans bare `$VAR` immediately followed by non-ASCII characters.
+
 - 修复 CSV 导入允许空名称行静默入库：`_build_payload` 现在对空名称报行级错误，与录入接口的 `min_length=1` 约束保持一致。
 - Fix CSV import silently accepting rows with empty names: `_build_payload` now raises a row-level error, matching the entry API's `min_length=1` constraint.
 
