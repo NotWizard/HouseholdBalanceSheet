@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-13
+
+### Changed
+
+- 同步桌面端、前端与后端版本号为 `0.6.0`，归档整改清单 v2 全部修复与 CSV 导入体验优化用于发布。
+- Align desktop, frontend, and backend versions to `0.6.0` and archive all remediation v2 fixes plus the CSV import UX improvements for release.
+
 ### Removed
 
 - 下线无消费方的重端点 `GET /api/v1/snapshots/events`：每次响应反序列化最多 500 条完整快照 payload（数 MB）且无任何前端/脚本调用；事件列表请使用已有的轻量 `GET /api/v1/snapshots/events/summary`。（整改清单 v2 · V2-26）
