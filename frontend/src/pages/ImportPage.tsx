@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { FileUp, UploadCloud } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileUp, UploadCloud, X, XCircle } from 'lucide-react';
 
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -15,7 +15,18 @@ import {
 } from '../services/holdingRelatedQueries';
 import { PageHeader } from '../components/layout/PageHeader';
 import { commitImport, downloadImportErrors, fetchImportLogs, previewImport, type ImportPreview } from '../services/imports';
+import { cn } from '../lib/cn';
 import { formatError } from '../utils/formatError';
+
+type CommitResult = {
+  status: 'success' | 'partial' | 'failure';
+  inserted: number;
+  updated: number;
+  failed: number;
+  importId: number | null;
+  hasErrorReport: boolean;
+  message?: string;
+};
 
 export function ImportPage() {
   const queryClient = useQueryClient();
@@ -25,6 +36,7 @@ export function ImportPage() {
   const [error, setError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloadingImportId, setDownloadingImportId] = useState<number | null>(null);
+  const [commitResult, setCommitResult] = useState<CommitResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const logsQuery = useQuery({
@@ -44,8 +56,18 @@ export function ImportPage() {
 
   const commitMutation = useMutation({
     mutationFn: (target: File) => commitImport(target),
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       setError(null);
+      // 显性化结果反馈：原先只有导入日志新增一条，用户无法确定“成了没有”。
+      // 成功后文件/预检已清空（防重复提交），横幅是唯一即时反馈，必须显眼。
+      setCommitResult({
+        status: data.failed_rows > 0 ? 'partial' : 'success',
+        inserted: data.inserted_rows,
+        updated: data.updated_rows,
+        failed: data.failed_rows,
+        importId: data.import_id,
+        hasErrorReport: Boolean(data.error_report_path),
+      });
       // 成功后清空文件与预检结果：否则提交按钮立即恢复可点，
       // 误点会把同一文件重复导入（重复日志、潜在的重复插数）。
       setFile(null);
@@ -57,7 +79,16 @@ export function ImportPage() {
       // CSV import 一次可能批量插入/更新数十条 holding，对分析数据冲击大，走全失效
       await invalidateAllHoldingDependentQueries(queryClient);
     },
-    onError: (e) => setError(formatError(e)),
+    onError: (e) =>
+      setCommitResult({
+        status: 'failure',
+        inserted: 0,
+        updated: 0,
+        failed: 0,
+        importId: null,
+        hasErrorReport: false,
+        message: formatError(e),
+      }),
   });
 
   const handleDownloadErrors = async (importId: number) => {
@@ -98,6 +129,8 @@ export function ImportPage() {
                 const next = event.target.files?.[0] ?? null;
                 setFile(next);
                 setPreview(null);
+                // 选了新文件，上一次的导入结果即过期，避免陈旧横幅误导
+                setCommitResult(null);
               }}
             />
           </div>
@@ -122,6 +155,68 @@ export function ImportPage() {
           {error ? <p className="text-sm text-rose-600">{error}</p> : null}
           {!preview && file ? (
             <p className="text-sm text-muted-foreground">请先点击“预检”，确认导入影响后再提交。</p>
+          ) : null}
+
+          {commitResult ? (
+            <div
+              role="status"
+              className={cn(
+                'flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm',
+                commitResult.status === 'success' &&
+                  'border-emerald-200 bg-emerald-50 text-emerald-800',
+                commitResult.status === 'partial' &&
+                  'border-amber-200 bg-amber-50 text-amber-800',
+                commitResult.status === 'failure' &&
+                  'border-rose-200 bg-rose-50 text-rose-800'
+              )}
+            >
+              <div className="flex items-start gap-2">
+                {commitResult.status === 'success' ? (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                ) : null}
+                {commitResult.status === 'partial' ? (
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                ) : null}
+                {commitResult.status === 'failure' ? (
+                  <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                ) : null}
+                <div className="space-y-1">
+                  <p className="font-medium">
+                    {commitResult.status === 'success'
+                      ? `导入成功：新增 ${commitResult.inserted} 条，更新 ${commitResult.updated} 条`
+                      : null}
+                    {commitResult.status === 'partial'
+                      ? `部分导入成功：新增 ${commitResult.inserted} 条，更新 ${commitResult.updated} 条，失败 ${commitResult.failed} 条`
+                      : null}
+                    {commitResult.status === 'failure'
+                      ? `导入失败：${commitResult.message ?? '未知错误'}`
+                      : null}
+                  </p>
+                  {commitResult.status === 'partial' &&
+                  commitResult.hasErrorReport &&
+                  commitResult.importId != null ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDownloadErrors(commitResult.importId!)}
+                      disabled={downloadingImportId === commitResult.importId}
+                    >
+                      {downloadingImportId === commitResult.importId
+                        ? '下载中...'
+                        : '下载错误明细'}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="关闭导入结果提示"
+                className="shrink-0 opacity-60 transition-opacity hover:opacity-100"
+                onClick={() => setCommitResult(null)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           ) : null}
         </CardContent>
       </Card>
@@ -223,6 +318,7 @@ function PreviewRowsTable({ rows }: { rows: ImportPreview['rows'] }) {
           <TableHeader>
             <TableRow>
               <TableHead>行号</TableHead>
+              <TableHead>名称</TableHead>
               <TableHead>动作</TableHead>
               <TableHead>错误</TableHead>
             </TableRow>
@@ -231,6 +327,7 @@ function PreviewRowsTable({ rows }: { rows: ImportPreview['rows'] }) {
             {rows.map((row) => (
               <TableRow key={`${row.row}-${row.action}-${row.error ?? ''}`}>
                 <TableCell>{row.row}</TableCell>
+                <TableCell>{row.name ?? '—'}</TableCell>
                 <TableCell>{row.action}</TableCell>
                 <TableCell>{row.error ?? '-'}</TableCell>
               </TableRow>
@@ -252,6 +349,7 @@ function PreviewRowsTable({ rows }: { rows: ImportPreview['rows'] }) {
         <TableHeader>
           <TableRow>
             <TableHead>行号</TableHead>
+            <TableHead>名称</TableHead>
             <TableHead>动作</TableHead>
             <TableHead>错误</TableHead>
           </TableRow>
@@ -259,7 +357,7 @@ function PreviewRowsTable({ rows }: { rows: ImportPreview['rows'] }) {
         <TableBody>
           {paddingTop > 0 ? (
             <tr aria-hidden>
-              <td colSpan={3} style={{ height: paddingTop }} />
+              <td colSpan={4} style={{ height: paddingTop }} />
             </tr>
           ) : null}
           {items.map((vrow) => {
@@ -267,6 +365,7 @@ function PreviewRowsTable({ rows }: { rows: ImportPreview['rows'] }) {
             return (
               <TableRow key={`${row.row}-${row.action}-${row.error ?? ''}`}>
                 <TableCell>{row.row}</TableCell>
+                <TableCell>{row.name ?? '—'}</TableCell>
                 <TableCell>{row.action}</TableCell>
                 <TableCell>{row.error ?? '-'}</TableCell>
               </TableRow>
@@ -274,7 +373,7 @@ function PreviewRowsTable({ rows }: { rows: ImportPreview['rows'] }) {
           })}
           {paddingBottom > 0 ? (
             <tr aria-hidden>
-              <td colSpan={3} style={{ height: paddingBottom }} />
+              <td colSpan={4} style={{ height: paddingBottom }} />
             </tr>
           ) : null}
         </TableBody>

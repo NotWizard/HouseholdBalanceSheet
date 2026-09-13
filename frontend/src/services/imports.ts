@@ -11,7 +11,7 @@ export type ImportPreview = {
   inserted_rows: number;
   updated_rows: number;
   failed_rows: number;
-  rows: Array<{ row: number; action: string; error: string | null }>;
+  rows: Array<{ row: number; name: string | null; action: string; error: string | null }>;
 };
 
 export type ImportCommitResult = {

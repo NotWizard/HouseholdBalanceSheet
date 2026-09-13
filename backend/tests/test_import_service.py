@@ -293,3 +293,69 @@ def test_import_and_migration_handlers_offload_blocking_work_to_threadpool():
     migration_source = inspect.getsource(migration_api)
     assert "run_in_threadpool" in migration_source
     assert inspect.iscoroutinefunction(migration_api.import_migration)
+
+
+def test_preview_rows_include_name_for_valid_and_invalid_rows():
+    """预检行必须带名称：成功行取规范名，失败行捞原始 name 原文，无名为 None。"""
+    init_database()
+    with SessionLocal() as session:
+        session.query(SnapshotEvent).delete()
+        session.query(SnapshotDaily).delete()
+        session.query(HoldingItem).delete()
+        session.query(Member).delete()
+        session.add(Member(family_id=1, name="Alice"))
+        session.commit()
+
+        content = "\n".join(
+            [
+                "name,type,member,category_l1,category_l2,category_l3,currency,amount_original,target_ratio",
+                "现金,asset,Alice,现金存款类,银行存款,活期,CNY,700,20",
+                "黄金,asset,不存在的成员,其他实物,贵金属与珠宝,黄金实物,CNY,100,1",
+                ",asset,Alice,现金存款类,银行存款,活期,CNY,100,1",
+            ]
+        ).encode("utf-8")
+
+        preview = ImportService.preview_csv(session, content)
+        assert preview["total_rows"] == 3
+        assert preview["rows"][0]["name"] == "现金"
+        # 失败行也要能看到原始名称，否则用户无法定位是哪条
+        assert preview["rows"][1]["name"] == "黄金"
+        assert preview["rows"][1]["error"] is not None
+        assert "成员不存在" in preview["rows"][1]["error"]
+        # name 本身为空的失败行 → None
+        assert preview["rows"][2]["name"] is None
+        assert preview["rows"][2]["error"] is not None
+
+
+def test_error_report_csv_includes_name_column():
+    """错误明细 CSV 表头与数据行都带名称列，与界面预检表格一致。"""
+    init_database()
+    with SessionLocal() as session:
+        session.query(SnapshotEvent).delete()
+        session.query(SnapshotDaily).delete()
+        session.query(HoldingItem).delete()
+        session.query(Member).delete()
+        session.add(Member(family_id=1, name="Alice"))
+        session.commit()
+
+        content = "\n".join(
+            [
+                "name,type,member,category_l1,category_l2,category_l3,currency,amount_original,target_ratio",
+                "现金,asset,Alice,现金存款类,银行存款,活期,CNY,700,20",
+                "黄金,asset,不存在的成员,其他实物,贵金属与珠宝,黄金实物,CNY,100,1",
+            ]
+        ).encode("utf-8")
+
+        result, parsed = ImportService.commit_csv(session, content, "names.csv")
+        session.commit()
+        assert result["failed_rows"] == 1
+
+        report_path = ImportService.finalize_error_report(session, result["import_id"], parsed)
+        session.commit()
+        assert report_path is not None
+
+        report_text = Path(report_path).read_text(encoding="utf-8")
+        lines = report_text.strip().splitlines()
+        assert lines[0] == "row,name,action,error"
+        assert "黄金" in lines[1]
+        assert "成员不存在" in lines[1]

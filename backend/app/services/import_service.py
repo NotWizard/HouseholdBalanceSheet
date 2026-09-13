@@ -42,6 +42,9 @@ class ParsedRow:
     payload: dict | None
     action: str
     error: str | None
+    # 名称用于预检表格与错误明细展示：成功行取规范名，失败行捞原始 name 原文
+    # （失败行往往正是名称写错的行，没名字用户无法定位），默认 None 兼容既有构造点。
+    name: str | None = None
 
 
 @dataclass
@@ -277,9 +280,25 @@ def _parse_csv(content: bytes, prefetch: _ImportPrefetch) -> list[ParsedRow]:
                 )
             seen_keys[key] = idx
             action = _resolve_action(payload, prefetch)
-            parsed_rows.append(ParsedRow(index=idx, payload=payload, action=action, error=None))
+            parsed_rows.append(
+                ParsedRow(
+                    index=idx,
+                    payload=payload,
+                    action=action,
+                    error=None,
+                    name=payload["name"],
+                )
+            )
         except Exception as exc:  # noqa: BLE001
-            parsed_rows.append(ParsedRow(index=idx, payload=None, action="invalid", error=str(exc)))
+            parsed_rows.append(
+                ParsedRow(
+                    index=idx,
+                    payload=None,
+                    action="invalid",
+                    error=str(exc),
+                    name=(raw.get("name") or "").strip() or None,
+                )
+            )
 
     return parsed_rows
 
@@ -339,10 +358,14 @@ def _build_payload(raw: dict[str, str], prefetch: _ImportPrefetch) -> dict:
             raise ValueError("资产必须提供 target_ratio")
         target_ratio = Decimal(raw_target)
 
+    name = raw["name"].strip()
+    if not name:
+        raise ValueError("名称不能为空")
+
     return {
         "member_id": member.id,
         "type": htype,
-        "name": raw["name"].strip(),
+        "name": name,
         "category_l1_id": l1.id,
         "category_l2_id": l2.id,
         "category_l3_id": l3.id,
@@ -502,6 +525,7 @@ def _to_preview(parsed: list[ParsedRow]) -> dict:
         "rows": [
             {
                 "row": row.index,
+                "name": row.name,
                 "action": row.action,
                 "error": row.error,
             }
@@ -516,8 +540,8 @@ def _write_error_report(import_id: int, parsed: list[ParsedRow]) -> Path:
     path = Path(settings.storage_dir) / "import_errors" / f"import-{import_id}-errors.csv"
     with path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["row", "action", "error"])
+        writer.writerow(["row", "name", "action", "error"])
         for row in parsed:
             if row.error is not None:
-                writer.writerow([row.index, row.action, row.error])
+                writer.writerow([row.index, row.name or "", row.action, row.error])
     return path

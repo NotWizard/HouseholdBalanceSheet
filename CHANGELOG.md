@@ -22,6 +22,9 @@
 
 ### Fixed
 
+- 修复 CSV 导入允许空名称行静默入库：`_build_payload` 现在对空名称报行级错误，与录入接口的 `min_length=1` 约束保持一致。
+- Fix CSV import silently accepting rows with empty names: `_build_payload` now raises a row-level error, matching the entry API's `min_length=1` constraint.
+
 - `docs/整改清单-v2.md` 全部 44 项处理完毕：43 项修复落地，V2-42（桌面 postinstall 死脚本）复核驳回——`macos-alias` rebuild 仍被 build-dmg.mjs 的 ds-store 链路需要，非死脚本。修复记录表已回填逐项状态与 commit。
 - All 44 items in `docs/整改清单-v2.md` are now resolved: 43 fixes landed, and V2-42 (desktop postinstall dead script) was rejected on re-verification — the `macos-alias` rebuild is still required by build-dmg.mjs's ds-store chain. The remediation table now records per-item status and commits.
 
@@ -128,6 +131,9 @@
 - Fix weekend/holiday FX rates being stored as exact same-day values. Both the CFETS window query and Frankfurter non-trading-day responses now persist under the actual data date from the response; non-trading-day lookups use the historical fallback marked as estimated, and cold starts on weekends no longer fail with “rate unavailable”. (Remediation v2 · V2-1)
 
 ### Added
+
+- CSV 导入体验优化：预检结果表格新增「名称」列（行号/名称/动作/错误 四列，解析失败的行也会尽力显示原始名称）；提交导入后显示显性化结果横幅——全部成功为绿色、部分失败为琥珀色并附错误明细下载入口、提交失败为红色原因提示，横幅可手动关闭且选择新文件时自动清除；错误明细 CSV 同步增加名称列。（docs/plans/2026-09-13-csv-import-preview-name-and-result-banner.md）
+- CSV import UX improvements: the preview table gains a "name" column (row/name/action/error; rows that fail parsing still show their raw name when available); after commit, an explicit result banner appears—green for full success, amber for partial success with an error-report download entry, red with the failure reason on request failure; the banner is dismissible and clears automatically when a new file is selected; the downloadable error report CSV gains a name column too.
 
 - 新增 `docs/整改清单-v2.md`：全仓深度审查报告（44 项发现：4 高 / 19 中 / 21 低），与整改清单 v1 互补，作为本轮逐项修复的基线清单。
 - Add `docs/整改清单-v2.md`: a full-repo review report (44 findings: 4 high / 19 medium / 21 low) complementing remediation list v1, serving as the baseline for this round of item-by-item fixes.
