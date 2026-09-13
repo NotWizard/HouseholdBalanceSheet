@@ -88,6 +88,8 @@ export function EntryPage() {
   const [memberDeleteOpen, setMemberDeleteOpen] = useState(false);
   const [memberDeleteId, setMemberDeleteId] = useState('');
   const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
+  // 单个删除的二次确认目标：点垃圾桶只开弹窗，确认后才真正删除
+  const [pendingDeleteHolding, setPendingDeleteHolding] = useState<Holding | null>(null);
   const [focusedMemberId, setFocusedMemberId] = useState<number | null>(null);
   const [normalizeMemberId, setNormalizeMemberId] = useState<number | null>(null);
   const [normalizeError, setNormalizeError] = useState<string | null>(null);
@@ -147,6 +149,7 @@ export function EntryPage() {
     mutationFn: deleteHolding,
     onSuccess: async () => {
       setActionError(null);
+      setPendingDeleteHolding(null);
       await invalidateHoldingRelatedQueries(queryClient);
     },
     onError: (e) => {
@@ -404,9 +407,21 @@ export function EntryPage() {
   }, [filteredHoldings]);
 
   const handleDeleteHolding = useCallback(
-    (holdingId: number) => deleteHoldingMutation.mutate(holdingId),
-    [deleteHoldingMutation]
+    (holdingId: number) => {
+      // 只开确认弹窗，不直接删除：防止误点垃圾桶导致数据丢失
+      const target = allHoldings.find((row) => row.id === holdingId);
+      if (target) {
+        setPendingDeleteHolding(target);
+      }
+    },
+    [allHoldings]
   );
+
+  const confirmDeleteHolding = useCallback(() => {
+    if (pendingDeleteHolding) {
+      deleteHoldingMutation.mutate(pendingDeleteHolding.id);
+    }
+  }, [pendingDeleteHolding, deleteHoldingMutation]);
 
   const handleOpenNormalize = useCallback(
     (memberId: number) => {
@@ -544,6 +559,10 @@ export function EntryPage() {
         onMemberDeleteIdChange={setMemberDeleteId}
         onSubmitDeleteSelected={submitDeleteSelected}
         onSubmitDeleteByMember={submitDeleteByMember}
+        singleDeleteTarget={pendingDeleteHolding}
+        singleDeletePending={deleteHoldingMutation.isPending}
+        onCloseSingleDelete={() => setPendingDeleteHolding(null)}
+        onSubmitSingleDelete={confirmDeleteHolding}
       />
 
       <EntryHoldingFormDialog

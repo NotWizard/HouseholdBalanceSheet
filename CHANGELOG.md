@@ -132,6 +132,9 @@
 
 ### Added
 
+- 录入页单个删除增加二次确认：点击条目的删除按钮现在先弹出确认对话框（显示名称、类型与金额，警示不可撤销），明确点击「确认删除」后才真正删除，防止误点丢数据。
+- Add a confirmation step for single-item deletion on the entry page: clicking a row's delete button now opens a dialog showing the item's name, type, and amount with an irreversibility warning, and the deletion only happens after an explicit “Confirm delete”.
+
 - CSV 导入体验优化：预检结果表格新增「名称」列（行号/名称/动作/错误 四列，解析失败的行也会尽力显示原始名称）；提交导入后显示显性化结果横幅——全部成功为绿色、部分失败为琥珀色并附错误明细下载入口、提交失败为红色原因提示，横幅可手动关闭且选择新文件时自动清除；错误明细 CSV 同步增加名称列。（docs/plans/2026-09-13-csv-import-preview-name-and-result-banner.md）
 - CSV import UX improvements: the preview table gains a "name" column (row/name/action/error; rows that fail parsing still show their raw name when available); after commit, an explicit result banner appears—green for full success, amber for partial success with an error-report download entry, red with the failure reason on request failure; the banner is dismissible and clears automatically when a new file is selected; the downloadable error report CSV gains a name column too.
 

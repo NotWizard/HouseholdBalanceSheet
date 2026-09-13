@@ -1,7 +1,9 @@
 import { formatCurrency } from '../../utils/format';
+import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Dialog } from '../ui/dialog';
 import { Select } from '../ui/select';
+import type { Holding } from '../../types';
 import type { BulkDeleteSummary } from './entryPageLogic';
 
 type EntryBulkDeleteDialogsProps = {
@@ -19,6 +21,11 @@ type EntryBulkDeleteDialogsProps = {
   onMemberDeleteIdChange: (value: string) => void;
   onSubmitDeleteSelected: () => void;
   onSubmitDeleteByMember: () => void;
+  // 单个删除的二次确认：目标为 null 时弹窗关闭
+  singleDeleteTarget: Holding | null;
+  singleDeletePending: boolean;
+  onCloseSingleDelete: () => void;
+  onSubmitSingleDelete: () => void;
 };
 
 export function EntryBulkDeleteDialogs({
@@ -36,9 +43,57 @@ export function EntryBulkDeleteDialogs({
   onMemberDeleteIdChange,
   onSubmitDeleteSelected,
   onSubmitDeleteByMember,
+  singleDeleteTarget,
+  singleDeletePending,
+  onCloseSingleDelete,
+  onSubmitSingleDelete,
 }: EntryBulkDeleteDialogsProps) {
   return (
     <>
+      <Dialog
+        open={singleDeleteTarget != null}
+        title="删除该条目？"
+        description="删除后将立即刷新录入列表、快照与分析看板数据。"
+        onClose={onCloseSingleDelete}
+        footer={
+          <>
+            <Button variant="outline" onClick={onCloseSingleDelete}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={onSubmitSingleDelete}
+              disabled={singleDeletePending}
+            >
+              {singleDeletePending ? '删除中...' : '确认删除'}
+            </Button>
+          </>
+        }
+      >
+        {singleDeleteTarget ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Badge
+                variant={
+                  singleDeleteTarget.type === 'asset' ? 'default' : 'secondary'
+                }
+              >
+                {singleDeleteTarget.type === 'asset' ? '资产' : '负债'}
+              </Badge>
+              <span className="font-medium">{singleDeleteTarget.name}</span>
+              <span className="text-muted-foreground">
+                {formatCurrency(
+                  singleDeleteTarget.amount_original,
+                  singleDeleteTarget.currency
+                )}
+              </span>
+            </div>
+            <div className="rounded-lg border border-rose-200 bg-rose-50/70 p-3 text-sm text-rose-700">
+              此操作不可撤销，该条目将从当前账本中删除。
+            </div>
+          </div>
+        ) : null}
+      </Dialog>
       <Dialog
         open={selectedDeleteOpen}
         title="批量删除已选条目"

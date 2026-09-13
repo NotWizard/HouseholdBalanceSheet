@@ -295,3 +295,31 @@ test('buildNormalizationPlan 只归一化正目标占比资产', () => {
   assert.deepEqual(plan.items.map((item) => item.proposed), [66.67, 33.33]);
   assert.equal(plan.afterTotal, 100);
 });
+
+test('单个删除必须经二次确认弹窗，不再直接触发删除', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+
+  const pageSource = readFileSync(
+    resolve(process.cwd(), 'src/pages/EntryPage.tsx'),
+    'utf8'
+  );
+  const dialogsSource = readFileSync(
+    resolve(process.cwd(), 'src/components/entry/EntryBulkDeleteDialogs.tsx'),
+    'utf8'
+  );
+
+  // 点垃圾桶只开弹窗：handleDeleteHolding 里不允许直接 mutate
+  // （useCallback 函数体内部也有 `);`，匹配到两空格缩进的收尾行为止）
+  const handler = pageSource.match(/const handleDeleteHolding = useCallback\([\s\S]*?\n  \);/);
+  assert.ok(handler, '应找到 handleDeleteHolding');
+  assert.doesNotMatch(handler[0], /deleteHoldingMutation\.mutate/);
+  assert.match(handler[0], /setPendingDeleteHolding/);
+
+  // 确认弹窗存在且有确认删除按钮与不可撤销提示
+  assert.match(dialogsSource, /singleDeleteTarget/);
+  assert.match(dialogsSource, /确认删除/);
+  assert.match(dialogsSource, /此操作不可撤销/);
+  // 确认动作才真正触发删除
+  assert.match(pageSource, /const confirmDeleteHolding = useCallback\([\s\S]*?deleteHoldingMutation\.mutate/);
+});
